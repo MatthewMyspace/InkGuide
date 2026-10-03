@@ -1,0 +1,824 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="theme-color" content="#ffffff">
+<title>InkGuide – Lo-fi Prototype</title>
+<style>
+  :root {
+    --bg: #ffffff;
+    --page: #e9e9e9;
+    --ink: #000000;
+    --muted: #5c5c5c;
+    --card: #f0f0f0;
+    --card-press: #e2e2e2;
+    --line: #b8b8b8;
+    --line-strong: #000000;
+    --ok: #000000;
+    --radius: 10px;
+    --gutter: clamp(16px, 5vw, 24px);
+    box-sizing: border-box;
+    padding-top: env(safe-area-inset-top, 0px);
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  *, *::before, *::after { box-sizing: inherit; }
+  html { scroll-padding-top: env(safe-area-inset-top, 0px); -webkit-text-size-adjust: 100%; }
+  html, body { margin: 0; min-height: 100%; }
+  body {
+    background: var(--page);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.4;
+    -webkit-tap-highlight-color: transparent;
+    overflow-x: hidden;
+  }
+  button { font: inherit; color: inherit; }
+
+  /* App shell: full-width on phones, centred column on desktop */
+  .app {
+    width: 100%;
+    max-width: 430px;
+    margin: 0 auto;
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--bg);
+    display: flex;
+    flex-direction: column;
+  }
+  @media (min-width: 480px) {
+    .app { border-left: 1px solid var(--line); border-right: 1px solid var(--line); }
+  }
+
+  .screen { display: none; flex: 1; flex-direction: column; min-height: 0; }
+  .screen.active { display: flex; }
+
+  /* Header */
+  .topbar {
+    display: flex; align-items: center; gap: 8px;
+    min-height: 56px;
+    padding: 8px var(--gutter) 4px;
+  }
+  .icon-btn {
+    width: 44px; height: 44px; margin-left: -10px;
+    display: grid; place-items: center;
+    background: none; border: 0; border-radius: 8px; cursor: pointer;
+  }
+  .icon-btn:active { background: var(--card-press); }
+  .icon-btn svg { width: 24px; height: 24px; }
+  .step-label { margin-left: auto; font-size: 14px; color: var(--muted); }
+
+  .progress { display: flex; gap: 6px; padding: 0 var(--gutter); }
+  .progress span { flex: 1; height: 4px; border-radius: 2px; background: var(--line); }
+  .progress span.on { background: var(--ink); }
+
+  .content {
+    flex: 1;
+    padding: 20px var(--gutter) 24px;
+    display: flex; flex-direction: column; gap: 12px;
+  }
+  h1 { font-size: clamp(22px, 6.4vw, 26px); line-height: 1.2; margin: 0; font-weight: 700; }
+  .sub { margin: 0 0 8px; color: var(--muted); font-size: 15px; }
+
+  /* Bottom action area: sticky, not fixed, so it never overlaps on short screens */
+  .actions {
+    position: sticky; bottom: 0;
+    padding: 12px var(--gutter) calc(16px + env(safe-area-inset-bottom, 0px));
+    margin-bottom: calc(-1 * env(safe-area-inset-bottom, 0px));
+    background: var(--bg);
+    border-top: 1px solid var(--line);
+    display: flex; flex-direction: column; gap: 10px;
+  }
+
+  .btn {
+    width: 100%; min-height: 52px;
+    padding: 14px 16px;
+    border-radius: var(--radius);
+    border: 1px solid var(--ink);
+    background: var(--ink); color: #fff;
+    font-size: 17px; font-weight: 600;
+    cursor: pointer;
+    transition: transform .08s ease, opacity .15s ease;
+  }
+  .btn:active { transform: scale(.98); opacity: .85; }
+  .btn.secondary { background: var(--bg); color: var(--ink); }
+  .btn:disabled { background: var(--line); border-color: var(--line); color: #fff; cursor: not-allowed; transform: none; opacity: 1; }
+  .btn:focus-visible, .option:focus-visible, .icon-btn:focus-visible, .field input:focus-visible { outline: 3px solid var(--ink); outline-offset: 2px; }
+
+  /* Selectable cards: whole card is the tap target */
+  .options { display: flex; flex-direction: column; gap: 10px; }
+  .option {
+    display: flex; align-items: center; gap: 14px;
+    width: 100%; min-height: 64px;
+    padding: 14px 16px;
+    text-align: left;
+    background: var(--card);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    cursor: pointer;
+    transition: background .1s ease;
+  }
+  .option:active { background: var(--card-press); }
+  .option[aria-checked="true"] { background: var(--bg); border: 2px solid var(--line-strong); padding: 13px 15px; }
+  .radio {
+    flex: none; width: 22px; height: 22px; border-radius: 50%;
+    border: 2px solid var(--ink); display: grid; place-items: center;
+  }
+  .option[aria-checked="true"] .radio::after { content: ""; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); }
+  .option .thumb {
+    flex: none; width: 44px; height: 44px; border: 1px solid var(--line); border-radius: 6px;
+    background: var(--bg); display: grid; place-items: center;
+  }
+  .option .thumb svg { width: 28px; height: 28px; }
+  .option .text { flex: 1; min-width: 0; }
+  .option .title { display: block; font-weight: 600; font-size: 17px; }
+  .option .desc { display: block; color: var(--muted); font-size: 14px; overflow-wrap: anywhere; }
+
+  /* Login */
+  .logo {
+    width: 72px; height: 72px; border: 1px solid var(--ink); border-radius: 16px;
+    display: grid; place-items: center; margin: 24px 0 8px;
+  }
+  .logo svg { width: 40px; height: 40px; }
+  .field { display: flex; flex-direction: column; gap: 6px; }
+  .field label { font-size: 14px; font-weight: 600; }
+  .field input {
+    width: 100%; min-height: 50px; padding: 12px 14px;
+    font-size: 16px; /* 16px stops iOS zooming on focus */
+    border: 1px solid var(--line); border-radius: var(--radius);
+    background: var(--bg); color: var(--ink);
+  }
+  .field input.invalid { border-color: var(--ink); border-width: 2px; }
+  .error { min-height: 20px; margin: 0; font-size: 14px; font-weight: 600; }
+  .link-btn { background: none; border: 0; padding: 12px 0; text-decoration: underline; font-size: 15px; cursor: pointer; align-self: center; }
+
+  /* Connect */
+  .device {
+    border: 1px solid var(--line); border-radius: var(--radius); background: var(--card);
+    padding: 16px; display: flex; flex-direction: column; gap: 14px;
+  }
+  .device-row { display: flex; align-items: center; gap: 14px; }
+  .device-row .thumb { width: 52px; height: 52px; border: 1px solid var(--line); border-radius: 8px; background: var(--bg); display: grid; place-items: center; flex: none; }
+  .device-row .thumb svg { width: 32px; height: 32px; }
+  .device-info { min-width: 0; }
+  .device-name { font-weight: 600; font-size: 17px; overflow-wrap: anywhere; }
+  .device-desc { margin: 0; font-size: 14px; color: var(--muted); }
+  .device.is-connected { background: var(--bg); border: 2px solid var(--line-strong); padding: 15px; }
+  .connect-btn:disabled.is-connected { background: var(--bg); border-color: var(--ink); color: var(--ink); cursor: default; }
+  .connect-btn.is-connecting:disabled { background: var(--card); border-color: var(--line); color: var(--ink); }
+  .ready-hint { margin: 0; text-align: center; font-size: 14px; color: var(--muted); }
+  .status { font-size: 14px; color: var(--muted); }
+  .status.connected { color: var(--ok); font-weight: 600; }
+  .connect-btn { min-height: 48px; font-size: 16px; }
+  .connect-btn.is-connected { background: var(--bg); color: var(--ink); }
+  .spinner {
+    display: inline-block; width: 14px; height: 14px; margin-right: 8px; vertical-align: -2px;
+    border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%;
+    animation: spin .8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .summary-box { border: 1px dashed var(--line); border-radius: var(--radius); padding: 12px 14px; font-size: 15px; }
+  .summary-box dl { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; }
+  .summary-box dt { color: var(--muted); }
+  .summary-box dd { margin: 0; font-weight: 600; }
+
+  /* Profile */
+  .avatar { width: 64px; height: 64px; border-radius: 50%; border: 1px solid var(--ink); background: var(--card); display: grid; place-items: center; font-weight: 700; font-size: 20px; margin-top: 8px; }
+  h2 { font-size: 18px; margin: 12px 0 0; font-weight: 700; }
+  .h2-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; margin-top: 12px; }
+  .h2-row h2 { margin: 0; }
+  .sim-tag { font-size: 12px; color: var(--muted); border: 1px dashed var(--line); border-radius: 4px; padding: 2px 6px; }
+  .recent { list-style: none; margin: 0; padding: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .recent li { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; background: var(--card); }
+  .recent li + li { border-top: 1px solid var(--line); }
+  .recent .r-name { font-weight: 600; display: block; }
+  .recent .r-ex { display: block; font-size: 15px; }
+  .recent .r-meta { font-size: 13px; color: var(--muted); display: block; }
+  .recent .r-score { font-weight: 700; font-size: 18px; flex: none; }
+  .recent li.new { background: var(--bg); border-left: 3px solid var(--ink); }
+  .empty { padding: 16px; border: 1px dashed var(--line); border-radius: var(--radius); color: var(--muted); font-size: 15px; margin: 0; }
+
+  /* Practice in progress */
+  .practice-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; }
+  .timer { font-variant-numeric: tabular-nums; font-size: 17px; font-weight: 600; border: 1px solid var(--ink); border-radius: 6px; padding: 4px 10px; display: inline-flex; align-items: center; gap: 8px; }
+  .live-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--ink); animation: blink 1.2s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .2; } }
+  .sensors { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+  .sensor { display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; padding: 12px 14px; background: var(--card); }
+  .sensor + .sensor { border-top: 1px solid var(--line); }
+  .sensor .s-name { font-weight: 600; }
+  .sensor .s-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; grid-row: span 2; align-self: center; }
+  .sensor .s-status { font-size: 14px; color: var(--muted); }
+  .guidance { border: 2px solid var(--ink); border-radius: var(--radius); padding: 14px; display: flex; gap: 12px; align-items: flex-start; }
+  .guidance svg { flex: none; width: 24px; height: 24px; margin-top: 2px; }
+  .guidance p { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.35; }
+  .notes { display: flex; flex-direction: column; gap: 8px; font-size: 14px; color: var(--muted); }
+  .notes p { margin: 0; display: flex; gap: 8px; align-items: flex-start; }
+  .notes svg { flex: none; width: 18px; height: 18px; margin-top: 1px; }
+
+  /* Results */
+  .check {
+    width: 64px; height: 64px; border: 2px solid var(--ink); border-radius: 50%;
+    display: grid; place-items: center; margin: 8px 0 4px;
+  }
+  .check svg { width: 32px; height: 32px; }
+  .overall { border: 2px solid var(--ink); border-radius: var(--radius); padding: 14px 16px; display: flex; align-items: baseline; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+  .overall span { font-weight: 600; }
+  .overall b { font-size: 34px; line-height: 1; }
+  .metrics { border: 1px solid var(--line); border-radius: var(--radius); padding: 4px 14px; background: var(--card); }
+  .metric { padding: 10px 0; }
+  .metric + .metric { border-top: 1px solid var(--line); }
+  .metric-top { display: flex; justify-content: space-between; gap: 12px; margin-bottom: 6px; }
+  .metric-top b { font-variant-numeric: tabular-nums; }
+  .bar { height: 8px; border: 1px solid var(--ink); border-radius: 4px; background: var(--bg); overflow: hidden; }
+  .bar i { display: block; height: 100%; background: var(--ink); width: 0; transition: width .5s ease; }
+  .feedback { border: 1px solid var(--line); border-radius: var(--radius); padding: 12px 14px; font-size: 15px; }
+  .feedback p { margin: 0; }
+  .stats { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  .stat { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: 10px; min-width: 0; }
+  .stat b { display: block; font-size: 20px; font-variant-numeric: tabular-nums; }
+  .stat span { font-size: 13px; color: var(--muted); }
+  .stat.change { background: var(--bg); border: 2px solid var(--ink); padding: 9px; }
+  .progress-note { margin: 0; font-size: 13px; color: var(--muted); }
+
+  .toast {
+    position: fixed; left: 50%; transform: translateX(-50%) translateY(20px);
+    bottom: calc(96px + env(safe-area-inset-bottom, 0px));
+    background: var(--ink); color: #fff; padding: 10px 16px; border-radius: 8px;
+    font-size: 14px; opacity: 0; pointer-events: none; transition: all .2s ease; max-width: calc(100% - 32px);
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { transition: none !important; animation-duration: 1.5s !important; }
+  }
+  @media (max-width: 340px) {
+    .option .thumb { display: none; }
+    .stat b { font-size: 18px; }
+  }
+</style>
+</head>
+<body>
+<div class="app" id="app">
+
+  <!-- 1. LOGIN -->
+  <section class="screen active" id="s-login" aria-label="Log in">
+    <form class="content" id="login-form" novalidate>
+      <div class="logo" aria-hidden="true">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="10" y="3" width="12" height="15" rx="2"/><path d="M13 18v6h6v-6M16 24v6"/></svg>
+      </div>
+      <h1>Log In to InkGuide</h1>
+      <p class="sub">Tattoo training on synthetic skin, with real-time AI guidance.</p>
+      <div class="field">
+        <label for="name">Name</label>
+        <input id="name" type="text" autocomplete="given-name" autocapitalize="words" enterkeyhint="next" placeholder="Enter your name" aria-describedby="name-error">
+        <p class="error" id="name-error" role="alert"></p>
+      </div>
+      <div class="field">
+        <label for="password">Password</label>
+        <input id="password" type="password" autocomplete="current-password" enterkeyhint="go" placeholder="Enter password" aria-describedby="password-error">
+        <p class="error" id="password-error" role="alert"></p>
+      </div>
+      <button type="submit" hidden></button>
+    </form>
+    <div class="actions">
+      <button class="btn" id="login-btn">Log In</button>
+    </div>
+  </section>
+
+  <!-- 2. TECHNIQUE -->
+  <section class="screen" id="s-technique" aria-label="Choose a technique">
+    <div class="topbar">
+      <button class="icon-btn" data-back aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <span class="step-label">Step 1 of 4</span>
+    </div>
+    <div class="progress" aria-hidden="true"><span class="on"></span><span></span><span></span><span></span></div>
+    <div class="content">
+      <h1>What do you want to practise?</h1>
+      <p class="sub">Choose one tattoo technique.</p>
+      <div class="options" role="radiogroup" aria-label="Technique" data-group="technique">
+        <button class="option" role="radio" aria-checked="false" data-value="Line Work">
+          <span class="radio" aria-hidden="true"></span>
+          <span class="text"><span class="title">Line Work</span><span class="desc">Practise line control, consistent movement and needle control.</span></span>
+          <span class="thumb" aria-hidden="true"><svg viewBox="0 0 28 28" fill="none" stroke="#000" stroke-width="1.4"><path d="M3 18c5-10 9 6 14-4s6 2 8 0"/></svg></span>
+        </button>
+        <button class="option" role="radio" aria-checked="false" data-value="Shading">
+          <span class="radio" aria-hidden="true"></span>
+          <span class="text"><span class="title">Shading</span><span class="desc">Practise smooth shading, hand movement and consistent coverage.</span></span>
+          <span class="thumb" aria-hidden="true"><svg viewBox="0 0 28 28"><circle cx="14" cy="14" r="10" fill="none" stroke="#000" stroke-width="1.4"/><path d="M14 4a10 10 0 0 1 0 20z" fill="#999"/></svg></span>
+        </button>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" data-next="s-exercise" data-requires="technique" disabled>Continue</button>
+    </div>
+  </section>
+
+  <!-- 3. EXERCISE -->
+  <section class="screen" id="s-exercise" aria-label="Choose exercise">
+    <div class="topbar">
+      <button class="icon-btn" data-back aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <span class="step-label">Step 2 of 4</span>
+    </div>
+    <div class="progress" aria-hidden="true"><span class="on"></span><span class="on"></span><span></span><span></span></div>
+    <div class="content">
+      <h1>Choose Exercise</h1>
+      <div class="summary-box">
+        <dl>
+          <dt>Technique</dt><dd id="e-technique">–</dd>
+        </dl>
+      </div>
+      <p class="sub">Choose one exercise to practise on synthetic skin.</p>
+      <div class="options" role="radiogroup" aria-label="Exercise" id="exercise-list"></div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="exercise-continue" disabled>Continue</button>
+    </div>
+  </section>
+
+  <!-- 4. CONNECT -->
+  <section class="screen" id="s-connect" aria-label="Connect training devices">
+    <div class="topbar">
+      <button class="icon-btn" data-back aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <span class="step-label">Step 3 of 4</span>
+    </div>
+    <div class="progress" aria-hidden="true"><span class="on"></span><span class="on"></span><span class="on"></span><span></span></div>
+    <div class="content">
+      <h1>Connect Training Devices</h1>
+      <p class="sub">Connect both devices before starting your practice session.</p>
+
+      <div class="device" data-device="sensor">
+        <div class="device-row">
+          <span class="thumb" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="4" width="10" height="13" rx="2"/><path d="M12 17v5h4v-5M14 22v6"/><path d="M22 8a5 5 0 0 1 0 6M25 6a9 9 0 0 1 0 10"/></svg></span>
+          <div class="device-info">
+            <div class="device-name">Tattoo Machine Sensor</div>
+            <div class="status" aria-live="polite">Not Connected</div>
+          </div>
+        </div>
+        <p class="device-desc">Measures needle angle, needle depth and movement consistency.</p>
+        <button class="btn secondary connect-btn">Connect</button>
+      </div>
+
+      <div class="device" data-device="glasses">
+        <div class="device-row">
+          <span class="thumb" aria-hidden="true"><svg viewBox="0 0 32 32" fill="none" stroke="#000" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="11" height="8" rx="3"/><rect x="18" y="12" width="11" height="8" rx="3"/><path d="M14 15h4M3 14l-1-3M29 14l1-3"/></svg></span>
+          <div class="device-info">
+            <div class="device-name">Smart Glasses</div>
+            <div class="status" aria-live="polite">Not Connected</div>
+          </div>
+        </div>
+        <p class="device-desc">Display real-time AI guidance during tattoo practice.</p>
+        <button class="btn secondary connect-btn">Connect</button>
+      </div>
+
+      <div class="summary-box">
+        <dl>
+          <dt>Technique</dt><dd id="sum-technique">–</dd>
+          <dt>Exercise</dt><dd id="sum-exercise">–</dd>
+        </dl>
+      </div>
+    </div>
+    <div class="actions">
+      <p class="ready-hint" id="ready-hint" aria-live="polite">0 of 2 devices connected</p>
+      <button class="btn" id="start-btn" disabled>Start Practice</button>
+    </div>
+  </section>
+
+  <!-- 5. PRACTICE -->
+  <section class="screen" id="s-practice" aria-label="Practice in progress">
+    <div class="topbar">
+      <button class="icon-btn" data-back aria-label="Back"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg></button>
+      <span class="step-label">Step 4 of 4</span>
+    </div>
+    <div class="progress" aria-hidden="true"><span class="on"></span><span class="on"></span><span class="on"></span><span class="on"></span></div>
+    <div class="content">
+      <div class="practice-head">
+        <h1>Practice in Progress</h1>
+        <span class="timer" aria-label="Session time"><span class="live-dot" aria-hidden="true"></span><span id="timer">00:00</span></span>
+      </div>
+      <div class="summary-box">
+        <dl>
+          <dt>Technique</dt><dd id="p-technique">–</dd>
+          <dt>Exercise</dt><dd id="p-exercise">–</dd>
+        </dl>
+      </div>
+
+      <div class="h2-row"><h2>Live Sensor Feedback</h2><span class="sim-tag">Simulated</span></div>
+      <div class="sensors" aria-live="off">
+        <div class="sensor">
+          <span class="s-name">Needle Angle</span>
+          <span class="s-value" id="v-angle">50°</span>
+          <span class="s-status" id="st-angle">Good ✓</span>
+        </div>
+        <div class="sensor">
+          <span class="s-name">Needle Depth</span>
+          <span class="s-value" id="v-depth">1.8 mm</span>
+          <span class="s-status" id="st-depth">Good ✓</span>
+        </div>
+        <div class="sensor">
+          <span class="s-name">Movement Consistency</span>
+          <span class="s-value" id="v-move" style="font-size:16px">Good</span>
+          <span class="s-status">Status</span>
+        </div>
+      </div>
+
+      <div class="h2-row"><h2>AI Guidance</h2><span class="sim-tag">Simulated</span></div>
+      <div class="guidance">
+        <svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="11" height="8" rx="3"/><rect x="18" y="12" width="11" height="8" rx="3"/><path d="M14 15h4"/></svg>
+        <p id="guidance-msg" aria-live="polite">Keep your hand movement steady.</p>
+      </div>
+      <div class="notes">
+        <p><svg viewBox="0 0 32 32" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="12" width="11" height="8" rx="3"/><rect x="18" y="12" width="11" height="8" rx="3"/><path d="M14 15h4"/></svg><span>AI guidance is also displayed through your smart glasses.</span></p>
+        <p><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v5M12 16h.01"/></svg><span>You remain in control. Use your own judgement when following AI guidance.</span></p>
+      </div>
+    </div>
+    <div class="actions">
+      <button class="btn" id="finish-btn">Finish Practice</button>
+    </div>
+  </section>
+
+  <!-- 6. RESULTS -->
+  <section class="screen" id="s-results" aria-label="Practice complete">
+    <div class="content">
+      <div class="check" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none" stroke="#000" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5 9-10"/></svg></div>
+      <h1>Practice Complete</h1>
+      <div class="summary-box">
+        <dl>
+          <dt>Technique</dt><dd id="r-technique">–</dd>
+          <dt>Exercise</dt><dd id="r-exercise">–</dd>
+          <dt>Duration</dt><dd id="r-time">0:00</dd>
+        </dl>
+      </div>
+      <div class="overall"><span>Overall Score</span><b id="r-overall">–</b></div>
+
+      <div class="h2-row"><h2>Performance</h2><span class="sim-tag">Simulated results</span></div>
+      <div class="metrics">
+        <div class="metric"><div class="metric-top"><span>Needle Angle</span><b id="r-angle">–</b></div><div class="bar"><i id="b-angle"></i></div></div>
+        <div class="metric"><div class="metric-top"><span>Needle Depth</span><b id="r-depth">–</b></div><div class="bar"><i id="b-depth"></i></div></div>
+        <div class="metric"><div class="metric-top"><span>Movement Consistency</span><b id="r-move">–</b></div><div class="bar"><i id="b-move"></i></div></div>
+      </div>
+
+      <h2>AI Feedback</h2>
+      <div class="feedback"><p id="r-feedback">–</p></div>
+
+      <h2>Progress</h2>
+      <div class="stats">
+        <div class="stat"><b id="r-prev">–</b><span>Previous Score</span></div>
+        <div class="stat"><b id="r-curr">–</b><span>Current Score</span></div>
+        <div class="stat change"><b id="r-change">–</b><span>Change</span></div>
+      </div>
+      <p class="progress-note" id="r-progress-note"></p>
+    </div>
+    <div class="actions">
+      <button class="btn" id="again-btn">Practice Again</button>
+      <button class="btn secondary" id="profile-btn">Back to Profile</button>
+    </div>
+  </section>
+
+  <!-- PROFILE -->
+  <section class="screen" id="s-profile" aria-label="Profile">
+    <div class="content">
+      <div class="avatar" aria-hidden="true" id="avatar"></div>
+      <h1>Welcome, <span id="display-name"></span></h1>
+      <p class="sub"><span id="session-count">2</span> practice sessions completed</p>
+      <h2>Recent Practice</h2>
+      <ul class="recent" id="recent-list"></ul>
+    </div>
+    <div class="actions">
+      <button class="btn" id="new-practice-btn">Start New Practice</button>
+      <button class="btn secondary" id="logout-btn">Log out</button>
+    </div>
+  </section>
+
+</div>
+<div class="toast" id="toast" role="status"></div>
+
+<script>
+(function () {
+  var state = { userName: '', technique: null, exercise: null, seconds: 0 };
+  var history = ['s-login'];
+  var timerId = null, sensorId = null, guideId = null;
+
+  var exercises = {
+    'Line Work': [
+      { name: 'Straight Lines', desc: 'Practise steady hand movement and consistent straight lines.' },
+      { name: 'Curved Lines',   desc: 'Practise smooth curves while maintaining consistent needle control.' },
+      { name: 'Basic Shapes',   desc: 'Practise controlled outlines using simple shapes.' }
+    ],
+    'Shading': [
+      { name: 'Smooth Gradient',    desc: 'Practise a smooth transition from dark to light.' },
+      { name: 'Whip Shading',       desc: 'Practise controlled whip movements and gradual shading.' },
+      { name: 'Small Area Shading', desc: 'Practise consistent shading within a defined area.' }
+    ]
+  };
+  // Exercise-specific tips mixed into the AI Guidance rotation (based on the selected exercise, not on scanning)
+  var exerciseGuidance = {
+    'Straight Lines':     ['Keep the line straight. Move from your arm, not your wrist.'],
+    'Curved Lines':       ['Slow down slightly through the curve to keep it smooth.'],
+    'Basic Shapes':       ['Line up the start point before closing the shape.'],
+    'Smooth Gradient':    ['Lighten your pressure gradually toward the light end.'],
+    'Whip Shading':       ['Keep each whip motion the same length and speed.'],
+    'Small Area Shading': ['Stay inside the edge of the area and keep passes even.']
+  };
+
+  function $(id) { return document.getElementById(id); }
+
+  function show(id, push) {
+    document.querySelectorAll('.screen').forEach(function (s) { s.classList.toggle('active', s.id === id); });
+    if (push !== false) history.push(id);
+    window.scrollTo(0, 0);
+    if (id === 's-connect') {
+      $('sum-technique').textContent = state.technique || '–';
+      $('sum-exercise').textContent = state.exercise || '–';
+    }
+    if (id === 's-exercise') renderExercises();
+    if (id === 's-profile') renderProfile();
+    if (id === 's-practice') startPractice();
+    else stopTimer();
+  }
+
+  function back() {
+    if (history.length > 1) { history.pop(); show(history[history.length - 1], false); }
+  }
+
+  function toast(msg) {
+    var t = $('toast'); t.textContent = msg; t.classList.add('show');
+    clearTimeout(toast._t); toast._t = setTimeout(function () { t.classList.remove('show'); }, 1800);
+  }
+
+  /* Login */
+  // Simulated login: any non-empty name and password is accepted. Nothing is stored or checked.
+  function clearError(input, errId) { input.classList.remove('invalid'); $(errId).textContent = ''; }
+  $('name').addEventListener('input', function () { clearError(this, 'name-error'); });
+  $('password').addEventListener('input', function () { clearError(this, 'password-error'); });
+
+  function doLogin() {
+    var n = $('name'), p = $('password'), ok = true;
+    clearError(n, 'name-error'); clearError(p, 'password-error');
+    var name = n.value.trim().replace(/\s+/g, ' ');
+    if (!name) { n.classList.add('invalid'); $('name-error').textContent = 'Please enter your name.'; ok = false; }
+    if (!p.value) { p.classList.add('invalid'); $('password-error').textContent = 'Please enter a password.'; ok = false; }
+    if (!ok) { (name ? p : n).focus(); return; }
+    state.userName = name;
+    applyUserName();
+    document.activeElement && document.activeElement.blur();
+    history = ['s-profile'];
+    show('s-profile', false);
+  }
+  function applyUserName() {
+    var name = state.userName || '';
+    document.querySelectorAll('#display-name, [data-user-name]').forEach(function (el) { el.textContent = name; });
+    var initials = name.split(' ').filter(Boolean).slice(0, 2).map(function (w) { return w.charAt(0).toUpperCase(); }).join('');
+    $('avatar').textContent = initials;
+  }
+  $('login-btn').addEventListener('click', doLogin);
+  $('login-form').addEventListener('submit', function (ev) { ev.preventDefault(); doLogin(); });
+
+  /* Selectable cards – the whole card is the button */
+  document.querySelectorAll('[data-group]').forEach(function (group) {
+    var key = group.getAttribute('data-group');
+    group.querySelectorAll('.option').forEach(function (opt) {
+      opt.addEventListener('click', function () {
+        group.querySelectorAll('.option').forEach(function (o) { o.setAttribute('aria-checked', 'false'); });
+        opt.setAttribute('aria-checked', 'true');
+        state[key] = opt.getAttribute('data-value');
+        var cont = document.querySelector('[data-requires="' + key + '"]');
+        if (cont) cont.disabled = false;
+      });
+    });
+  });
+
+  document.querySelectorAll('[data-next]').forEach(function (b) {
+    b.addEventListener('click', function () { show(b.getAttribute('data-next')); });
+  });
+  document.querySelectorAll('[data-back]').forEach(function (b) { b.addEventListener('click', back); });
+
+  /* Choose Exercise – list depends on the selected technique */
+  var exerciseFor = null;
+  function renderExercises() {
+    var t = state.technique || 'Shading';
+    $('e-technique').textContent = t;
+    if (exerciseFor !== t) { state.exercise = null; exerciseFor = t; }
+    var list = $('exercise-list');
+    list.innerHTML = '';
+    exercises[t].forEach(function (ex) {
+      var btn = document.createElement('button');
+      btn.className = 'option';
+      btn.setAttribute('role', 'radio');
+      btn.setAttribute('aria-checked', state.exercise === ex.name ? 'true' : 'false');
+      btn.innerHTML = '<span class="radio" aria-hidden="true"></span><span class="text"><span class="title"></span><span class="desc"></span></span>';
+      btn.querySelector('.title').textContent = ex.name;
+      btn.querySelector('.desc').textContent = ex.desc;
+      btn.addEventListener('click', function () {
+        list.querySelectorAll('.option').forEach(function (o) { o.setAttribute('aria-checked', 'false'); });
+        btn.setAttribute('aria-checked', 'true');
+        state.exercise = ex.name;
+        $('exercise-continue').disabled = false;
+      });
+      list.appendChild(btn);
+    });
+    $('exercise-continue').disabled = !state.exercise;
+  }
+  $('exercise-continue').addEventListener('click', function () { if (state.exercise) show('s-connect'); });
+
+  /* Connect */
+  var devices = { sensor: false, glasses: false };
+
+  function updateStart() {
+    var count = (devices.sensor ? 1 : 0) + (devices.glasses ? 1 : 0);
+    $('start-btn').disabled = count < 2;
+    $('ready-hint').textContent = count === 2 ? 'Both devices connected' : count + ' of 2 devices connected';
+  }
+
+  document.querySelectorAll('[data-device]').forEach(function (card) {
+    var key = card.getAttribute('data-device');
+    var btn = card.querySelector('.connect-btn');
+    var status = card.querySelector('.status');
+    btn.addEventListener('click', function () {
+      if (devices[key] || btn.disabled) return;
+      btn.disabled = true;
+      btn.classList.add('is-connecting');
+      btn.innerHTML = '<span class="spinner" aria-hidden="true"></span>Connecting...';
+      status.textContent = 'Connecting...';
+      setTimeout(function () {
+        devices[key] = true;
+        btn.classList.remove('is-connecting');
+        btn.classList.add('is-connected');
+        btn.textContent = 'Connected ✓';
+        status.textContent = 'Connected ✓';
+        status.classList.add('connected');
+        card.classList.add('is-connected');
+        updateStart();
+      }, 1600);
+    });
+  });
+
+  $('start-btn').addEventListener('click', function () {
+    if (devices.sensor && devices.glasses) show('s-practice');
+  });
+
+  /* ---------- Simulated practice session ---------- */
+  function rand(a, b) { return a + Math.random() * (b - a); }
+  function randInt(a, b) { return Math.floor(rand(a, b + 1)); }
+  function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+  function fmt(s) { var m = Math.floor(s / 60), x = s % 60; return (m < 10 ? '0' : '') + m + ':' + (x < 10 ? '0' : '') + x; }
+
+  var live = { angle: 50, depth: 1.8, move: 'Good' };
+  var generalGuidance = [
+    'Keep your hand movement steady.',
+    'Maintain a consistent hand speed.',
+    'Good depth control. Keep it steady.',
+    'Try to maintain the same angle through the stroke.'
+  ];
+
+  function stopTimer() {
+    clearInterval(timerId); clearInterval(sensorId); clearInterval(guideId);
+    timerId = sensorId = guideId = null;
+  }
+
+  function tickSensors() {
+    live.angle = Math.round(rand(45, 55));
+    live.depth = rand(1.5, 2.0).toFixed(1);
+    live.move = pick(['Good', 'Good', 'Stable', 'Stable', 'Slightly inconsistent']);
+    $('v-angle').textContent = live.angle + '°';
+    $('v-depth').textContent = live.depth + ' mm';
+    $('v-move').textContent = live.move;
+  }
+
+  function nextGuidance() {
+    var current = $('guidance-msg').textContent, msg;
+    if (live.angle >= 53 && Math.random() < 0.6) msg = 'Your needle angle is slightly high.';
+    else if (live.move === 'Slightly inconsistent' && Math.random() < 0.6) msg = 'Maintain a consistent hand speed.';
+    else {
+      var pool = generalGuidance.concat(exerciseGuidance[state.exercise] || []);
+      var options = pool.filter(function (m) { return m !== current; });
+      msg = pick(options);
+    }
+    $('guidance-msg').textContent = msg;
+  }
+
+  function startPractice() {
+    var t = state.technique || 'Line Work';
+    $('p-technique').textContent = t;
+    $('p-exercise').textContent = state.exercise || '–';
+    stopTimer();
+    state.seconds = 0; $('timer').textContent = '00:00';
+    $('guidance-msg').textContent = 'Keep your hand movement steady.';
+    tickSensors();
+    timerId = setInterval(function () { state.seconds++; $('timer').textContent = fmt(state.seconds); }, 1000);
+    sensorId = setInterval(tickSensors, 1500);
+    guideId = setInterval(nextGuidance, 5000);
+  }
+
+  /* ---------- Simulated results ---------- */
+  // Seed profile so "Previous Score" has something to compare against in tests
+  var sessions = [
+    { technique: 'Line Work', exercise: 'Straight Lines', score: 79, when: '3 days ago' },
+    { technique: 'Shading', exercise: 'Smooth Gradient', score: 74, when: 'Yesterday' }
+  ];
+  var lastAdded = null;
+
+  function buildFeedback(r) {
+    var m = [
+      { k: 'angle', v: r.angle }, { k: 'depth', v: r.depth }, { k: 'move', v: r.move }
+    ].sort(function (a, b) { return b.v - a.v; });
+    var best = m[0], worst = m[2];
+    var strength = {
+      angle: pick(['Your needle angle was consistent during most of the session.', 'You held a steady needle angle through most strokes.']),
+      depth: pick(['Your needle depth stayed within the target range for most of the session.', 'Good depth control across most of the session.']),
+      move:  pick(['Your hand movement was smooth and steady.', 'Your movement stayed stable for most of the session.'])
+    };
+    var weakness = {
+      angle: pick(['Your angle drifted higher at times, especially on longer strokes.', 'Your needle angle varied when changing direction.']),
+      depth: pick(['Your depth varied in places, which could cause patchy results.', 'Needle depth went slightly deep during some passes.']),
+      move:  pick(['Your movement became less stable toward the end.', 'Your hand speed changed between strokes.'])
+    };
+    var tip = {
+      angle: 'Try to maintain the same angle through each stroke.',
+      depth: 'Try keeping a light, consistent hand pressure.',
+      move:  'Try maintaining a steady hand speed during longer strokes.'
+    };
+    if (worst.v >= 85) {
+      return strength[best.k] + ' All three areas were strong this session. ' +
+        'Keep repeating this exercise to build consistency, or try another exercise.';
+    }
+    return strength[best.k] + ' ' + weakness[worst.k] + ' ' + tip[worst.k];
+  }
+
+  function setBar(id, v) { var el = $(id); el.style.width = '0'; requestAnimationFrame(function () { requestAnimationFrame(function () { el.style.width = v + '%'; }); }); }
+
+  $('finish-btn').addEventListener('click', function () {
+    stopTimer();
+    var t = state.technique || 'Line Work', ex = state.exercise || exercises[t][0].name;
+    var r = { angle: randInt(70, 95), depth: randInt(70, 95), move: randInt(65, 90) };
+    var avg = (r.angle + r.depth + r.move) / 3 + randInt(-3, 3);
+    r.overall = Math.max(70, Math.min(90, Math.round(avg)));
+
+    var prev = null;
+    for (var i = sessions.length - 1; i >= 0; i--) {
+      if (sessions[i].technique === t && sessions[i].exercise === ex) { prev = sessions[i]; break; }
+    }
+
+    $('r-technique').textContent = t;
+    $('r-exercise').textContent = ex;
+    $('r-time').textContent = fmt(state.seconds).replace(/^0/, '');
+    $('r-overall').textContent = r.overall + '%';
+    $('r-angle').textContent = r.angle + '%'; setBar('b-angle', r.angle);
+    $('r-depth').textContent = r.depth + '%'; setBar('b-depth', r.depth);
+    $('r-move').textContent = r.move + '%';  setBar('b-move', r.move);
+    $('r-feedback').textContent = buildFeedback(r);
+    $('r-curr').textContent = r.overall + '%';
+    if (prev) {
+      var d = r.overall - prev.score;
+      $('r-prev').textContent = prev.score + '%';
+      $('r-change').textContent = (d > 0 ? '+' : d < 0 ? '−' : '±') + Math.abs(d) + '%';
+      $('r-progress-note').textContent = 'Compared with your last ' + t + ': ' + ex + ' session.';
+    } else {
+      $('r-prev').textContent = '–';
+      $('r-change').textContent = '–';
+      $('r-progress-note').textContent = 'First ' + t + ': ' + ex + ' session. Your next session will be compared with this one.';
+    }
+
+    lastAdded = { technique: t, exercise: ex, score: r.overall, when: 'Just now' };
+    sessions.forEach(function (s) { if (s.when === 'Just now') s.when = 'Today'; });
+    sessions.push(lastAdded);
+    show('s-results');
+  });
+
+  function renderProfile() {
+    var list = $('recent-list');
+    list.innerHTML = '';
+    $('session-count').textContent = sessions.length;
+    sessions.slice().reverse().slice(0, 6).forEach(function (s) {
+      var li = document.createElement('li');
+      if (s === lastAdded) li.className = 'new';
+      li.innerHTML = '<span><span class="r-name"></span><span class="r-ex"></span><span class="r-meta"></span></span><span class="r-score"></span>';
+      li.querySelector('.r-name').textContent = s.technique;
+      li.querySelector('.r-ex').textContent = s.exercise;
+      li.querySelector('.r-meta').textContent = s.when;
+      li.querySelector('.r-score').textContent = s.score + '%';
+      list.appendChild(li);
+    });
+  }
+
+  $('again-btn').addEventListener('click', function () {
+    history = ['s-profile', 's-technique', 's-exercise', 's-connect'];
+    show('s-practice');
+  });
+  $('profile-btn').addEventListener('click', function () {
+    history = ['s-profile'];
+    show('s-profile', false);
+  });
+  $('new-practice-btn').addEventListener('click', function () { show('s-technique'); });
+  $('logout-btn').addEventListener('click', function () {
+    state.userName = ''; applyUserName();
+    $('name').value = ''; $('password').value = '';
+    history = ['s-login']; show('s-login', false);
+  });
+})();
+</script>
+</body>
+</html>

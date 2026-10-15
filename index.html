@@ -1,3 +1,4 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
 <!DOCTYPE html>
 <html lang="en" data-theme="light">
 <head>
@@ -18,6 +19,8 @@
     --line: #b8b8b8;
     --line-strong: #000000;
     --ok: #000000;
+    --good: #1a7f37;
+    --bad: #d32f2f;
     --radius: 10px;
     --gutter: clamp(16px, 5vw, 24px);
     box-sizing: border-box;
@@ -166,12 +169,12 @@
   .device-info { min-width: 0; }
   .device-name { font-weight: 600; font-size: 17px; overflow-wrap: anywhere; }
   .device-desc { margin: 0; font-size: 14px; color: var(--muted); }
-  .device.is-connected { background: var(--bg); border: 2px solid var(--line-strong); padding: 15px; }
-  .connect-btn:disabled.is-connected { background: var(--bg); border-color: var(--ink); color: var(--ink); cursor: default; }
+  .device.is-connected { background: var(--bg); border: 2px solid var(--good); padding: 15px; }
+  .connect-btn:disabled.is-connected { background: var(--bg); border-color: var(--good); color: var(--good); cursor: default; }
   .connect-btn.is-connecting:disabled { background: var(--card); border-color: var(--line); color: var(--ink); }
   .ready-hint { margin: 0; text-align: center; font-size: 14px; color: var(--muted); }
   .status { font-size: 14px; color: var(--muted); }
-  .status.connected { color: var(--ok); font-weight: 600; }
+  .status.connected { color: var(--good); font-weight: 600; }
   .connect-btn { min-height: 48px; font-size: 16px; }
   .connect-btn.is-connected { background: var(--bg); color: var(--ink); }
   .spinner {
@@ -211,7 +214,8 @@
   .sensor + .sensor { border-top: 1px solid var(--line); }
   .sensor .s-name { font-weight: 600; }
   .sensor .s-value { font-size: 20px; font-weight: 700; font-variant-numeric: tabular-nums; text-align: right; grid-row: span 2; align-self: center; }
-  .sensor .s-status { font-size: 14px; color: var(--muted); }
+  .sensor .s-status { font-size: 14px; font-weight: 600; color: var(--good); }
+  .sensor.warn .s-status { color: var(--bad); font-weight: 700; }
   .guidance { border: 2px solid var(--ink); border-radius: var(--radius); padding: 14px; display: flex; gap: 12px; align-items: flex-start; }
   .guidance svg { flex: none; width: 24px; height: 24px; margin-top: 2px; }
   .guidance p { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.35; }
@@ -408,20 +412,20 @@
 
       <div class="h2-row"><h2>Live Sensor Feedback</h2><span class="sim-tag">Simulated</span></div>
       <div class="sensors" aria-live="off">
-        <div class="sensor">
+        <div class="sensor" id="row-angle">
           <span class="s-name">Needle Angle</span>
           <span class="s-value" id="v-angle">50°</span>
           <span class="s-status" id="st-angle">Good ✓</span>
         </div>
-        <div class="sensor">
+        <div class="sensor" id="row-depth">
           <span class="s-name">Needle Depth</span>
           <span class="s-value" id="v-depth">1.8 mm</span>
           <span class="s-status" id="st-depth">Good ✓</span>
         </div>
-        <div class="sensor">
+        <div class="sensor" id="row-move">
           <span class="s-name">Movement Consistency</span>
           <span class="s-value" id="v-move" style="font-size:16px">Good</span>
-          <span class="s-status">Status</span>
+          <span class="s-status" id="st-move">Good ✓</span>
         </div>
       </div>
 
@@ -679,25 +683,78 @@
     timerId = sensorId = guideId = null;
   }
 
+  // Good ranges: angle 45–55°, depth 1.5–2.0 mm. Values outside these trigger a warning.
+  // The first few readings are scripted so a warning always appears early in every session.
+  // One reading every 1.5 s, so each warning below stays on screen for about 3 seconds.
+  var opening = [
+    null, null,                         // 0–3 s: all good
+    { angle: 'high' }, { angle: 'high' },  // ~3 s: angle too high
+    null,
+    { depth: 'deep' }, { depth: 'deep' },  // ~7.5 s: needle too deep
+    null,
+    { move: 'fast' }, { move: 'fast' },    // ~12 s: hand speed too fast
+    null, null,
+    { angle: 'low' }, { angle: 'low' }     // ~18 s: angle too low
+  ];
+  var held = null, holdLeft = 0;
+  var tickCount = 0;
+
+  var warnText = {
+    high:     { status: 'Too high ⚠',      tip: 'Your needle angle is slightly high. Lower it a little.' },
+    low:      { status: 'Too low ⚠',       tip: 'Your needle angle is too low. Raise it slightly.' },
+    deep:     { status: 'Too deep ⚠',      tip: 'Needle is going too deep. Lighten your hand pressure.' },
+    shallow:  { status: 'Too shallow ⚠',   tip: 'Needle depth is too shallow. Apply slightly more pressure.' },
+    fast:     { status: 'Speed too fast ⚠', tip: 'Your hand speed is too fast. Slow down and keep it consistent.' },
+    uneven:   { status: 'Speed uneven ⚠',  tip: 'Maintain a consistent hand speed.' }
+  };
+
+  function setRow(row, statusEl, warnKey) {
+    $(row).classList.toggle('warn', !!warnKey);
+    $(statusEl).textContent = warnKey ? warnText[warnKey].status : 'Good ✓';
+  }
+
   function tickSensors() {
-    live.angle = Math.round(rand(45, 55));
-    live.depth = rand(1.5, 2.0).toFixed(1);
-    live.move = pick(['Good', 'Good', 'Stable', 'Stable', 'Slightly inconsistent']);
+    var f = tickCount < opening.length ? (opening[tickCount] || {}) : null;
+    tickCount++;
+    if (!f) { // after the opening: warnings appear at random and last 2 readings (~3 s)
+      if (holdLeft > 0) { f = held; holdLeft--; }
+      else {
+        f = {};
+        if (Math.random() < 0.3) {
+          var k = pick(['angle', 'depth', 'move']);
+          f[k] = k === 'angle' ? pick(['high', 'low']) : k === 'depth' ? pick(['deep', 'shallow']) : pick(['fast', 'uneven']);
+          held = f; holdLeft = 1;
+        }
+      }
+    }
+    var wasWarn = live.warn;
+    live.angle = f.angle === 'high' ? randInt(57, 62) : f.angle === 'low' ? randInt(38, 43) : randInt(45, 55);
+    live.depth = (f.depth === 'deep' ? rand(2.2, 2.5) : f.depth === 'shallow' ? rand(1.0, 1.3) : rand(1.5, 2.0)).toFixed(1);
+    live.move = f.move === 'fast' ? 'Too fast' : f.move === 'uneven' ? 'Slightly inconsistent' : pick(['Good', 'Stable']);
+    live.warn = f.angle || f.depth || f.move || null;
+
     $('v-angle').textContent = live.angle + '°';
     $('v-depth').textContent = live.depth + ' mm';
-    $('v-move').textContent = live.move;
+    $('v-move').textContent = f.move === 'fast' ? 'Too fast' : f.move === 'uneven' ? 'Uneven' : live.move;
+    setRow('row-angle', 'st-angle', f.angle);
+    setRow('row-depth', 'st-depth', f.depth);
+    setRow('row-move', 'st-move', f.move);
+
+    // A warning updates the AI guidance straight away
+    if (live.warn) {
+      $('guidance-msg').textContent = warnText[live.warn].tip;
+      clearInterval(guideId); guideId = setInterval(nextGuidance, 5000);
+    } else if (wasWarn) {
+      $('guidance-msg').textContent = pick(['Good correction. Keep it steady.', 'Back in range. Keep going.', 'Well adjusted. Maintain this.']);
+      clearInterval(guideId); guideId = setInterval(nextGuidance, 5000);
+    }
   }
 
   function nextGuidance() {
-    var current = $('guidance-msg').textContent, msg;
-    if (live.angle >= 53 && Math.random() < 0.6) msg = 'Your needle angle is slightly high.';
-    else if (live.move === 'Slightly inconsistent' && Math.random() < 0.6) msg = 'Maintain a consistent hand speed.';
-    else {
-      var pool = generalGuidance.concat(exerciseGuidance[state.exercise] || []);
-      var options = pool.filter(function (m) { return m !== current; });
-      msg = pick(options);
-    }
-    $('guidance-msg').textContent = msg;
+    if (live.warn) return; // keep the warning tip while the reading is out of range
+    var current = $('guidance-msg').textContent;
+    var pool = generalGuidance.concat(exerciseGuidance[state.exercise] || []);
+    $('guidance-msg').textContent = pick(pool.filter(function (m) { return m !== current; }));
   }
 
   function startPractice() {
@@ -707,6 +764,7 @@
     stopTimer();
     state.seconds = 0; $('timer').textContent = '00:00';
     $('guidance-msg').textContent = 'Keep your hand movement steady.';
+    tickCount = 0; holdLeft = 0; live.warn = null;
     tickSensors();
     timerId = setInterval(function () { state.seconds++; $('timer').textContent = fmt(state.seconds); }, 1000);
     sensorId = setInterval(tickSensors, 1500);
@@ -822,3 +880,5 @@
 </script>
 </body>
 </html>
+
+</body></html>
